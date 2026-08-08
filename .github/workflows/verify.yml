@@ -1,0 +1,30 @@
+name: verify
+on:
+  push: {branches: [main]}
+  pull_request:
+jobs:
+  checker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the sandbox image
+        run: docker build -t checker .
+
+      # The checker must accept nothing it should reject. Each example below is
+      # a distinct way to be wrong, and each must be caught with its own exit
+      # code: 1 for "valid but not winning", 2 for "not a valid submission".
+      - name: Valid but not winning must exit 1
+        run: |
+          ./run-checker.sh examples/valid-not-winning.json && { echo "accepted a non-winning submission"; exit 1; }
+          [ $? -eq 1 ] || { echo "wrong exit code for a valid non-winning submission"; exit 1; }
+      - name: Every malformed example must be rejected
+        run: |
+          for f in examples/invalid-*.json; do
+            if ./run-checker.sh "$f"; then echo "checker ACCEPTED $f"; exit 1; fi
+            echo "correctly rejected $f"
+          done
+
+      # The accept path needs proving too: a checker that can only ever reject
+      # would pass every test above and be useless.
+      - name: The accept path must actually accept
+        run: python3 tests/test_accept.py
